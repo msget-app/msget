@@ -1,7 +1,7 @@
 # MacSpec
 
-Export your Mac’s hardware identifiers and macOS version as a Base64 configuration
-for MSGET.
+Export your Mac’s hardware identifiers as a Base64 configuration for MSGET.
+The macOS product version and build are pinned to 26.5.1 (`25F80`).
 
 ## Run
 

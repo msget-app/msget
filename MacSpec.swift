@@ -15,6 +15,9 @@ enum EncryptedHardwareProperty {
 enum AppleClientMetadata {
     // Sent as the IDS x-protocol-version header, not a protobuf version.
     static let idsProtocolVersion: Int32 = 1640
+    // Pinned macOS 26.5.1 profile (Darwin build 25F80), not the host OS.
+    static let osProductVersion = "26.5.1"
+    static let osBuildVersion = "25F80"
     // Fixed client metadata; these are not the host's installed versions.
     static let iCloudUserAgent = "com.apple.iCloudHelper/282 CFNetwork/1408.0.4 Darwin/22.5.0"
     // Included in the X-Mme-Client-Info header.
@@ -127,14 +130,6 @@ func requireItem(_ device: io_registry_entry_t, _ key: String) throws -> String 
     return value
 }
 
-func sysctl(name: String) -> String {
-    var size = 0
-    sysctlbyname(name, nil, &size, nil, 0)
-    var val = [CChar](repeating: 0, count: size)
-    sysctlbyname(name, &val, &size, nil, 0)
-    return String(cString: val)
-}
-
 func sha256(_ data: Data) -> Data {
     Data(SHA256.hash(data: data))
 }
@@ -200,7 +195,7 @@ func collectHwInfo() throws -> Data {
     inner.string(4, platformUuid)
     inner.string(5, (try requireItem(chosenTree, "boot-uuid")).trimmingCharacters(in: CharacterSet(["\0"])))
     inner.string(6, boardID)
-    inner.string(7, sysctl(name: "kern.osversion"))
+    inner.string(7, AppleClientMetadata.osBuildVersion)
     inner.bytes(8, try requireData(ioPower, EncryptedHardwareProperty.platformSerialNumber))
     inner.bytes(9, try requireData(ioPower, EncryptedHardwareProperty.platformUUID))
     inner.bytes(10, try requireData(ioPower, EncryptedHardwareProperty.bootUUID))
@@ -211,7 +206,7 @@ func collectHwInfo() throws -> Data {
 
     var outer = ProtoWriter()
     outer.message(1, inner.data)
-    outer.string(2, sysctl(name: "kern.osproductversion"))
+    outer.string(2, AppleClientMetadata.osProductVersion)
     outer.int32(3, AppleClientMetadata.idsProtocolVersion)
     outer.string(4, platformUuid)
     outer.string(5, AppleClientMetadata.iCloudUserAgent)

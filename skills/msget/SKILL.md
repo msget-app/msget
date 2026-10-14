@@ -23,6 +23,7 @@ Two install forms share one onboarding CLI, `msgetctl` (binary form: `./msget ct
 - Do not reset ownership to bypass sign-in.
 - Do not send a live message as a setup test.
 - Use `msgetctl wait` for asynchronous steps. Do not write sleep loops.
+- Keep only one active MSGET service for each Apple ID. Do not run a copied installation or copied state while the original service is active.
 
 ## 1. Start or resume
 
@@ -54,6 +55,28 @@ Otherwise, **ask the user which form to install**; never assume it from files pr
    ```sh
    ./start.sh
    ```
+
+### Keep the binary service running
+
+For the binary form, keeping the service running is your job, not the product's. MSGET ships no service-manager support: no unit files and no daemon mode. The executable runs in the foreground. `start.sh` only starts the service for the current session. For the Docker form, the Compose restart policy already does this job.
+
+> **Warning — copied state is the same service identity:** A copy of the binary and state on another machine has the same saved Apple and device state. The local state-directory lock cannot detect that copy. Do not run the original and the copy at the same time. Concurrent use can disrupt the iMessage registration. To move an installation, stop the old service first, then start the copied state. Services that run at the same time need separate state directories and different Apple IDs.
+
+Unless the user has already made this clear, ask one question: **"Should MSGET keep running after this session ends (logout, reboot, crash), or is start-on-demand at each session enough?"**
+
+- **On-demand is enough** — keep the `start.sh` model above. Tell the user the service runs only while this host keeps it alive.
+- **Keep running** — detect what this host offers and use it. Do not assume a specific service manager. Typical facilities, strongest first: the host service manager; a user scheduler such as cron (start at boot, and re-run the idempotent `start.sh` as a watchdog); or a detached session (`setsid nohup … &`) with a PID file. Pick the least invasive option that meets the requirement on this host.
+
+Rules for any method:
+
+- Get the explicit consent of the user before any system-level change: root or sudo, a new system user, files outside the install directory, or start at boot. Prefer user-level, reversible changes inside the install directory.
+- Run the executable in the foreground with explicit arguments (`--state-dir`, plus `--dashboard-dir` or `--no-dashboard`). Never run two instances on one state directory. The service refuses a second instance.
+- Stop the service with SIGTERM. It shuts down cleanly. Use SIGKILL only when SIGTERM fails.
+- Keep the operator socket visible to your shell. A supervisor option that gives the service a private `/tmp` hides `/tmp/msget/msgetctl.sock` and breaks `msgetctl`.
+- Set supervision up before `apple start`, never during an Apple challenge. A restart interrupts the operation.
+- Verify after setup: `msgetctl status --json` answers. If the user chose restart-on-crash or start-at-boot, test that claim once while no Apple operation is active. Restart the service through the supervisor, then check `status` again.
+- If this host offers no durable method (a hibernating bot VM), say so plainly. Keep the on-demand model. Do not promise always-on behavior that the host cannot give.
+- In your final report, state the method you set up, where its configuration lives, and how to stop the service. A later session finds the running service through `status`. It finds your supervision setup only through your report.
 
 ### Then, both forms
 

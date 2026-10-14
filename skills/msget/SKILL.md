@@ -118,7 +118,16 @@ For either MSGET email-code request, a successful response is deliberately gener
   printf 'MSGET_ACCOUNT_EMAIL=%s\n' '<email>' | msgetctl account send-sign-up-code --env-file - --json
   ```
 
-  Codes are short-lived: ask directly, submit with `--code-stdin` where the command supports it, and never repeat them.
+  Submit the code with the email address in the same stdin input:
+
+  ```sh
+  printf 'MSGET_ACCOUNT_EMAIL=%s\nMSGET_EMAIL_CODE=%s\n' '<email>' '<code>' | msgetctl account sign-in-code --env-file - --json
+  printf 'MSGET_ACCOUNT_EMAIL=%s\nMSGET_EMAIL_CODE=%s\n' '<email>' '<code>' | msgetctl account sign-up-with-code --env-file - --json
+  ```
+
+  For a new account, add `MSGET_ACCOUNT_NAME=<name>` to the same input if the user wants a display name.
+  Do not combine `--env-file -` with `--code-stdin`. The CLI rejects that combination.
+  Use `--code-stdin` only when the command needs no other stdin input, as in `apple verify`. Never repeat codes in reports.
 - **Apple passwords:** use the private-file choices below after the separate Apple ID prompt.
 - **Apple challenge data:** collect `APPLE_2FA_CODE` only after the challenge starts. Keep `APPLE_HARDWARE_PROFILE` in its existing sensitive base64 form. Submit hardware through the generic `--env-file -` route when required. Do not decode it, repeat it, or write it to disk.
 
@@ -203,8 +212,8 @@ Both password options apply only to `apple start` and `apple recovery start`.
 For recovery, replace `apple start` with `apple recovery start` in either example.
 Use `apple recovery verify-identity --apple-id EMAIL` when recovery needs only the identifier.
 These flags are not global options and are not accepted by `onboard`.
-With no new credentials, the start commands can resume saved Apple state.
-Supplying only the Apple ID or only a password source fails rather than resuming saved state.
+With no new credentials, `apple start` can resume saved Apple state. `apple recovery start` always requires new credentials.
+Supplying only the Apple ID or only a password source fails.
 
 ### MSGET password fallback
 

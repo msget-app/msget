@@ -1,18 +1,18 @@
 ---
 name: msget
-description: Deploy and onboard MSGET, a self-hosted iMessage/Telegram bridge, with Docker Compose or the single-file Linux binary (server, desktop, or bot VM such as a Grok computer). Use when setting up MSGET, resuming unfinished onboarding, or driving account sign-in and the Apple activation challenge through msgetctl status and nextActions.
+description: Deploy and onboard MSGET, a self-hosted iMessage/Telegram bridge, with the two-service Docker Compose or rootless Podman topology on an ordinary Linux host. Use when setting up MSGET, resuming unfinished onboarding, or driving account sign-in and the Apple activation challenge through msgetctl status and nextActions.
 ---
 
 # MSGET onboarding for agents
 
 Onboarding is guided, not autonomous. Several steps need the user in the loop — above all the Apple verification challenge: its code exists only after the challenge starts, and only the user can read it. You drive a loop: run the agent steps yourself, stop and ask the user at human steps. The service stores all progress server-side, so the loop can stop and resume at any point, including in a later session.
 
-Two install forms share one onboarding CLI, `msgetctl` (binary form: `./msget ctl --help`). The user picks the form in section 1; everything after it is shared. `msgetctl` in this guide means:
+MSGET ships only as a container image. The deployment is two services from that image: `msget` (core) owns state and talks to Apple; `msget-broker` is stateless and makes the fixed MSGET account/relay calls. `msgetctl` in this guide means:
 
 - Docker: `docker compose exec -T msget /usr/local/bin/msgetctl`
-- Binary: `./msget ctl` in the install directory
+- Podman: `podman compose -f compose.yaml -f compose.podman.yaml exec -T msget /usr/local/bin/msgetctl`
 
-**Ask** in this guide means: prompt the user with your harness's structured question tool (`ask`) when it has one — one question, with the real options when the step offers a choice. On a bare chat surface with no such tool (a Grok Bot computer, plain chat), ask directly in conversation, one question at a time, and wait for the reply. Either way, you run every `msgetctl` command yourself with the answers; handing the user a command to run is the opt-in exception in section 3, never the default.
+**Ask** in this guide means: prompt the user with your harness's structured question tool (`ask`) when it has one — one question, with the real options when the step offers a choice. On a bare chat surface with no such tool, ask directly in conversation, one question at a time, and wait for the reply. Either way, you run every `msgetctl` command yourself with the answers; handing the user a command to run is the opt-in exception in section 3, never the default.
 
 ## Rules
 
@@ -27,60 +27,40 @@ Two install forms share one onboarding CLI, `msgetctl` (binary form: `./msget ct
 
 ## 1. Start or resume
 
-If a deployment is already running, resume it: try `status` through the form the existing files indicate (an executable `./msget`, a `compose.yaml`). If `status` answers, that is the form — skip the question and go to section 2.
+First check the supported-host gate. MSGET needs an ordinary Linux host with Docker Engine + Compose or rootless Podman, system DNS returning real answers, and outbound TCP 80 to Apple, TCP 5223 to Apple, and TCP 443 to Apple/MSGET services. Agent/bot VMs and other mediated-egress environments — fake-IP DNS, 443-only transparent proxies, allowlist proxies, hibernating/ephemeral hosts — are unsupported. If the host matches one, stop and tell the user plainly; do not add DoH, IP pinning, or proxy workarounds.
 
-Otherwise, **ask the user which form to install**; never assume it from files present. Name anything you detected in the question as context (for example, "there is already an `msget` binary here"), then follow their choice:
+If a deployment is already running, resume it from its `compose.yaml`: identify whether Docker or Podman owns the `msget` and `msget-broker` containers, start both services if needed, and try `status`. If `status` answers, skip installation and go to section 2.
 
-- **Docker Compose** — the service runs in a container. Fits hosts with Docker that should stay always-on.
-- **Single-file binary** — one executable runs directly on this host. Fits hosts without Docker (bot VMs) and plain-process setups.
+Otherwise choose the runtime. Detect `docker` and `podman`; if both are usable and the user has not already chosen, ask which one to use. Then follow that runtime's steps.
 
 ### Docker Compose
 
-1. Create `compose.yaml` from the Docker Hub overview (`docker.io/msget/msget-app`). Keep existing state volumes.
+1. Create the two-service `compose.yaml` from the Docker Hub overview (`docker.io/msget/msget-app`), including both `msget` and `msget-broker`, the `msget-state` and `msget-ipc` volumes, and separate core/broker networks. Keep existing state volumes.
 2. Run `docker compose up -d`.
+3. Completion: both services are running and `msgetctl status --json` answers.
 
-### Single-file binary (no Docker)
+### Rootless Podman
 
-1. Pick the install directory. On a Grok Bot computer, use `/workspace/msget` (the durable disk). Download the binary for the host architecture (`uname -m`: `x86_64` → `amd64`, `aarch64` → `arm64`) and `SHA256SUMS` for one pinned release version from `https://github.com/msget-app/msget-app/releases/download/msget%2Fv$VERSION/`, then verify:
+1. Confirm the runtime user has subuid and subgid ranges of at least 65536 IDs each. Keep the shipped container `user:` and `group_add:` values exactly.
+2. Create the same `compose.yaml`, plus this Podman-only `compose.podman.yaml`. Separate network names alone do not guarantee isolation on rootless Podman:
 
-   ```sh
-   cd /workspace/msget
-   sha256sum -c SHA256SUMS --ignore-missing
-   mv msget-$VERSION-linux-amd64 msget
-   chmod +x msget
+   ```yaml
+   networks:
+     msget-core:
+       driver_opts:
+         isolate: "strict"
+     msget-broker:
+       driver_opts:
+         isolate: "strict"
    ```
+3. Prefer the named volumes. With bind mounts, use Podman's `:U` ownership handling or a compatible `keep-id` mapping so `65532:65532` can write `/state` and `65533:65534` can write `/run/msget-ipc`.
+4. Run `podman compose -f compose.yaml -f compose.podman.yaml up -d`.
+5. Verify isolation before onboarding: inspect both containers from the host (same image, expected users, broker has only `/run/msget-ipc`, no shared network), then run the broker-namespace probes from `apps/deployment/docs/network-isolation.md` in `msget-app/msget-app`. If podman-compose placed the broker in a pod, join that pod for the probe. Completion: every core-listener probe is refused or times out and `msgetctl status --json` answers. If a probe connects, stop and report that this Podman/Netavark release is not enforcing isolation; do not proceed as a Standard deployment.
+6. For autostart when the user asks: enable `loginctl enable-linger "$USER"` and run the project from a user systemd service, translate both services to Quadlet units, or use rootful Podman under systemd. Report the chosen method and how to stop it.
 
-2. Copy `start.sh` from this skill's directory beside the binary and run it. It starts the service headless with state in `./state`, or reports `already running`. Run it at the start of every session that needs messaging: the host may hibernate or be recreated between sessions, while `./state` on durable disk persists.
+> **Warning — copied state is the same service identity:** A copy of the state volume on another machine has the same saved Apple and device state. The state lock cannot detect that copy. Do not run the original and the copy at the same time. Concurrent use can disrupt the iMessage registration. To move an installation, stop the old stack first, then start the copied state. Services that run at the same time need separate state and different Apple IDs.
 
-   ```sh
-   ./start.sh
-   ```
-
-### Keep the binary service running
-
-For the binary form, keeping the service running is your job, not the product's. MSGET ships no service-manager support: no unit files and no daemon mode. The executable runs in the foreground. `start.sh` only starts the service for the current session. For the Docker form, the Compose restart policy already does this job.
-
-> **Warning — copied state is the same service identity:** A copy of the binary and state on another machine has the same saved Apple and device state. The local state-directory lock cannot detect that copy. Do not run the original and the copy at the same time. Concurrent use can disrupt the iMessage registration. To move an installation, stop the old service first, then start the copied state. Services that run at the same time need separate state directories and different Apple IDs.
-
-Unless the user has already made this clear, ask one question: **"Should MSGET keep running after this session ends (logout, reboot, crash), or is start-on-demand at each session enough?"**
-
-- **On-demand is enough** — keep the `start.sh` model above. Tell the user the service runs only while this host keeps it alive.
-- **Keep running** — detect what this host offers and use it. Do not assume a specific service manager. Typical facilities, strongest first: the host service manager; a user scheduler such as cron (start at boot, and re-run the idempotent `start.sh` as a watchdog); or a detached session (`setsid nohup … &`) with a PID file. Pick the least invasive option that meets the requirement on this host.
-
-Rules for any method:
-
-- Get the explicit consent of the user before any system-level change: root or sudo, a new system user, files outside the install directory, or start at boot. Prefer user-level, reversible changes inside the install directory.
-- Run the executable in the foreground with explicit arguments (`--state-dir`, plus `--dashboard-dir` or `--no-dashboard`). Never run two instances on one state directory. The service refuses a second instance.
-- Stop the service with SIGTERM. It shuts down cleanly. Use SIGKILL only when SIGTERM fails.
-- Keep the operator socket visible to your shell. A supervisor option that gives the service a private `/tmp` hides `/tmp/msget/msgetctl.sock` and breaks `msgetctl`.
-- Set supervision up before `apple start`, never during an Apple challenge. A restart interrupts the operation.
-- Verify after setup: `msgetctl status --json` answers. If the user chose restart-on-crash or start-at-boot, test that claim once while no Apple operation is active. Restart the service through the supervisor, then check `status` again.
-- If this host offers no durable method (a hibernating bot VM), say so plainly. Keep the on-demand model. Do not promise always-on behavior that the host cannot give.
-- In your final report, state the method you set up, where its configuration lives, and how to stop the service. A later session finds the running service through `status`. It finds your supervision setup only through your report.
-
-### Then, both forms
-
-Run `msgetctl status --json`. If you are resuming earlier onboarding, starting the service plus this status is the whole restart: `status` reports where it stopped.
+Run `msgetctl status --json`. If you are resuming earlier onboarding, starting both services plus this status is the whole restart: `status` reports where it stopped.
 
 ## 2. Run the loop
 
@@ -126,9 +106,9 @@ If `operation.failureCode` is `apple_code_rejected`, Apple did not accept the co
 
 For either MSGET email-code request, a successful response is deliberately generic: it does not prove an email was sent. Sign-in codes are sent only to an **existing** account; account-creation codes are sent only when the email can create a **new** account in this deployment's environment. If no code arrives, confirm the selected branch and environment before resending; repeated requests can be rate-limited.
 
-**Before `apple start`, confirm the user is present now**, with their trusted device or phone reachable, and able to reply promptly. Keep the service running until the challenge completes — on a bot VM, do not let the host hibernate mid-challenge. Restarting the service interrupts the operation (stage `interrupted`), and Apple activation must start over; progress before `apple start` is preserved.
+**Before `apple start`, confirm the user is present now**, with their trusted device or phone reachable, and able to reply promptly. Keep both services running until the challenge completes. Restarting the core interrupts the operation (stage `interrupted`), and Apple activation must start over; progress before `apple start` is preserved.
 
-**Dashboard-only steps** appear as a `dashboard` action with `actor: human`, `needs: none`: Telegram sign-in and adding activation quota. With Docker, the user does these in the web dashboard and you resume the loop. A headless binary install serves no dashboard, so they are unavailable there — tell the user plainly instead of working around them.
+**Dashboard-only steps** appear as a `dashboard` action with `actor: human`, `needs: none`: Telegram sign-in and adding activation quota. The user does these in the web dashboard and you resume the loop.
 
 ### How credentials reach you
 
@@ -253,7 +233,7 @@ Use this route only when the user asks for terminal isolation or declines agent-
 The user runs onboarding locally. Resume at section 5 when the user finishes.
 
 - Docker: `docker compose exec msget /usr/local/bin/msgetctl onboard --interactive`
-- Binary: `./msget ctl onboard --interactive` in the install directory
+- Podman: `podman compose -f compose.yaml -f compose.podman.yaml exec msget /usr/local/bin/msgetctl onboard --interactive`
 
 Apple onboarding prompts for the Apple ID and a password **file path**, not a plaintext Apple password.
 Individual Apple steps with `--interactive` also request a file path when credentials are needed.
@@ -280,7 +260,7 @@ Use the Apple options above instead. Other generic env fields retain their exist
 
 1. When the loop reaches the interfaces step, run `interfaces set --enable LIST` with the user's choice. Use `--mcp-policy` to limit MCP permissions.
 2. If the output shows `blueBubblesPasswordPending`, treat it as the `acknowledgement` moment in section 3: reveal once with `--reveal-password`, give the password to the user once (never in a report), then acknowledge after they confirm saving it.
-3. Expose only what the install form needs: with Docker, publish only the ports of the enabled interfaces in `compose.yaml`; with the binary, interfaces listen on loopback ports on this host — connect clients locally and do not expose them beyond the host without the user's explicit instruction.
+3. Publish only the ports of the enabled interfaces in `compose.yaml`, bound to loopback unless the user explicitly chooses another route. Do not expose interfaces beyond the host without the user's explicit instruction.
 
 ## 5. Check completion
 

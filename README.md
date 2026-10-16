@@ -4,7 +4,7 @@ Setup tools for [MSGET](https://hub.docker.com/r/msget/msget-app), a self-hosted
 
 ## Agent skill
 
-`skills/msget` is an [Agent Skills](https://agentskills.io) package. It teaches a coding agent to deploy MSGET (Docker Compose or the single-file Linux binary) and drive onboarding as a guided loop — account sign-in, the Apple verification challenge, interface setup — through `msgetctl`.
+`skills/msget` is an [Agent Skills](https://agentskills.io) package. It teaches a coding agent to deploy MSGET's two-service Docker Compose or rootless Podman topology and drive onboarding as a guided loop — account sign-in, the Apple verification challenge, interface setup — through `msgetctl`.
 
 Install from this repo with any Agent Skills installer:
 

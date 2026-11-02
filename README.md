@@ -19,20 +19,20 @@ or point the installer at `https://github.com/msget-app/msget/tree/main/skills/m
 Export your Mac's hardware identifiers as a Base64 configuration for MSGET — the `APPLE_HARDWARE_PROFILE` that onboarding asks for when no hardware configuration is ready.
 The macOS product version and build are pinned to 26.5.1 (`25F80`).
 
-Requires macOS 11+ and Apple's Command Line Tools, which include Swift and the macOS SDK. Full Xcode and Homebrew are unnecessary.
-
-If the tools are missing, run the following built-in macOS command and complete the installation dialog:
+Requires macOS 11+ (Apple Silicon or Intel). No developer tools needed — download the prebuilt universal binary from the latest release:
 
 ```sh
-xcode-select --install
-```
-
-Run in Bash, Zsh, or Fish without cloning:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/msget-app/MacSpec/main/MacSpec.swift | xcrun swift -
+curl -fsSL https://github.com/msget-app/msget/releases/latest/download/macspec -o macspec
+chmod +x macspec
+./macspec
 ```
 
 Copy the single output line into MSGET's hardware configuration input. Keep it private: it contains device identifiers.
 
-For diagnostics, replace `xcrun swift -` with `env HWINFO_DEBUG=1 xcrun swift -`. Errors go to stderr.
+For diagnostics, run `HWINFO_DEBUG=1 ./macspec`. Errors go to stderr.
+
+Alternatively, run from source without cloning. This requires Apple's Command Line Tools (`xcode-select --install` if missing), which include Swift and the macOS SDK:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/msget-app/msget/main/MacSpec.swift | xcrun swift -
+```

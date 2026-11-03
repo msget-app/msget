@@ -22,9 +22,7 @@ The macOS product version and build are pinned to 26.5.1 (`25F80`).
 Requires macOS 11+ (Apple Silicon or Intel). No developer tools needed — download the prebuilt universal binary from the latest release:
 
 ```sh
-curl -fsSL https://github.com/msget-app/msget/releases/latest/download/macspec -o macspec
-chmod +x macspec
-./macspec
+curl -fsSL https://github.com/msget-app/msget/releases/latest/download/macspec -o macspec && chmod +x macspec && ./macspec
 ```
 
 Copy the single output line into MSGET's hardware configuration input. Keep it private: it contains device identifiers.

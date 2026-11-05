@@ -1,6 +1,6 @@
 # msget
 
-Setup tools for [MSGET](https://hub.docker.com/r/msget/msget-app), a self-hosted iMessage/Telegram bridge: an agent skill that runs guided onboarding, and MacSpec, the macOS hardware-profile exporter that onboarding sometimes needs.
+Setup and operator tools for [MSGET](https://hub.docker.com/r/msget/msget-app), self-hosted iMessage for AI agents and automations: an agent skill that runs guided onboarding, MacSpec (the macOS hardware-profile exporter onboarding sometimes needs), the release-image verification key, and operator how-to docs.
 
 ## Agent skill
 
@@ -34,3 +34,19 @@ Alternatively, run from source without cloning. This requires Apple's Command Li
 ```sh
 curl -fsSL https://raw.githubusercontent.com/msget-app/msget/main/MacSpec.swift | xcrun swift -
 ```
+
+## Verifying release images
+
+`msget-image.pub` is the public key for MSGET's signed release indexes and SBOM attestations. The [Docker Hub guide](https://hub.docker.com/r/msget/msget-app) has the full procedure; fetch the key with:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/msget-app/msget/main/msget-image.pub
+```
+
+The key lives in this repo so any rotation is visible in git history.
+
+## Operator docs
+
+- [Network isolation: Standard and Docker Strong](docs/network-isolation.md) — firewall the core away from MSGET's hosted services.
+- [Capturing the broker's traffic](docs/traffic-capture.md) — watch hosted-service traffic yourself with your own CA.
+- [Backup, restore, and deletion of local state](docs/backup-and-deletion.md) — what is on disk, and how to remove it.

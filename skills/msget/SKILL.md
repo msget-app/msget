@@ -1,6 +1,6 @@
 ---
 name: msget
-description: Deploy and onboard MSGET, a self-hosted iMessage/Telegram bridge, with the two-service Docker Compose or rootless Podman topology on an ordinary Linux host. Use when setting up MSGET, resuming unfinished onboarding, or driving account sign-in and the Apple activation challenge through msgetctl status and nextActions.
+description: Deploy and onboard MSGET, self-hosted iMessage for AI agents and automations, on an ordinary Linux host with Docker Compose or rootless Podman. Use for MSGET setup, unfinished onboarding, account sign-in, and the Apple activation challenge through msgetctl status and nextActions.
 ---
 
 # MSGET onboarding for agents
@@ -55,7 +55,7 @@ Otherwise choose the runtime. Detect `docker` and `podman`; if both are usable a
    ```
 3. Prefer the named volumes. With bind mounts, use Podman's `:U` ownership handling or a compatible `keep-id` mapping so `65532:65532` can write `/state` and `65533:65534` can write `/run/msget-ipc`.
 4. Run `podman compose -f compose.yaml -f compose.podman.yaml up -d`.
-5. Verify isolation before onboarding: inspect both containers from the host (same image, expected users, broker has only `/run/msget-ipc`, no shared network), then run the broker-namespace probes from `apps/deployment/docs/network-isolation.md` in `msget-app/msget-app`. If podman-compose placed the broker in a pod, join that pod for the probe. Completion: every core-listener probe is refused or times out and `msgetctl status --json` answers. If a probe connects, stop and report that this Podman/Netavark release is not enforcing isolation; do not proceed as a Standard deployment.
+5. Verify isolation before onboarding. Inspect both containers from the host: same image, expected users, broker has only `/run/msget-ipc`, no shared network. Then run the broker-namespace probes from the public network isolation guide: https://github.com/msget-app/msget/blob/main/docs/network-isolation.md. If podman-compose placed the broker in a pod, join that pod for the probe. Completion: every core-listener probe is refused or times out and `msgetctl status --json` answers. If a probe connects, stop and report that this Podman/Netavark release is not enforcing isolation; do not proceed as a Standard deployment.
 6. For autostart when the user asks: enable `loginctl enable-linger "$USER"` and run the project from a user systemd service, translate both services to Quadlet units, or use rootful Podman under systemd. Report the chosen method and how to stop it.
 
 > **Warning — copied state is the same service identity:** A copy of the state volume on another machine has the same saved Apple and device state. The state lock cannot detect that copy. Do not run the original and the copy at the same time. Concurrent use can disrupt the iMessage registration. To move an installation, stop the old stack first, then start the copied state. Services that run at the same time need separate state and different Apple IDs.
